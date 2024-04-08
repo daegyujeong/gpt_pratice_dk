@@ -37,7 +37,11 @@ template = ChatPromptTemplate.from_messages(
     The difficulty of questions is {difficulty}
 
     Each question should have 4 answers, three of them must be incorrect and one should be correct.
-         
+    
+    Any of answers can not be duplicated to other questions which means, once the anwser has been used from one of qeustions,
+    the answer can not be used from the other qeustions.
+
+
     Use (o) to signal the correct answer.
          
     Question examples:
@@ -191,7 +195,6 @@ formatting_prompt = ChatPromptTemplate.from_messages(
 
 @st.cache_data(show_spinner="Making quiz...")
 def run_quiz_chain(topic, difficulty_level):
-    print(api_key)
     print(difficulty_level)
     doc = format_docs(docs)
     # print(doc)
@@ -201,7 +204,7 @@ def run_quiz_chain(topic, difficulty_level):
     )
     # Use the provided API key for the ChatOpenAI instance
     llm = ChatOpenAI(
-        # api_key=api_key,
+        api_key=api_key,
         temperature=0.1,
         model="gpt-3.5-turbo-1106",
         streaming=True,
@@ -253,28 +256,39 @@ def format_docs(docs):
 
 
 
+if st.sidebar.button("Generate Quiz"):    
+    if topic:
+        count = 0
+        response = run_quiz_chain(topic,difficulty_level)
+        with st.form("questions_form"):
+            for question in response["questions"]:
+                st.write(question["question"])
+                value = st.radio(
+                    "Select an option.",
+                    [answer["answer"] for answer in question["answers"]],
+                    index= None,
+                    key = count,
+                )
+                count = count+1
+                if {"answer": value, "correct": True} in question["answers"]:
+                    st.success("Correct!")
+                elif value is not None:
+                    st.error("Wrong!")
+            button = st.form_submit_button()
+
+    if not topic:
+            st.markdown(
+                """
+                Please Type Valid Input
+            """
+            )     
 if not topic:
     st.markdown(
         """
     Welcome to QuizGPT.
                 
-    I will make a quiz from Wikipedia articles or files you upload to test your knowledge and help you study.
+    I will make a quiz from Wikipedia articles to test your knowledge and help you study.
                 
-    Get started by uploading a file or searching on Wikipedia in the sidebar.
+    Get started by searching on Wikipedia in the sidebar.
     """
-    )
-else:
-    response = run_quiz_chain(topic,difficulty_level)
-    with st.form("questions_form"):
-        for question in response["questions"]:
-            st.write(question["question"])
-            value = st.radio(
-                "Select an option.",
-                [answer["answer"] for answer in question["answers"]],
-                index=None,
-            )
-            if {"answer": value, "correct": True} in question["answers"]:
-                st.success("Correct!")
-            elif value is not None:
-                st.error("Wrong!")
-        button = st.form_submit_button()
+    )        
