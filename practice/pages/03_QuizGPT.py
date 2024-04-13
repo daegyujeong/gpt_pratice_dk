@@ -11,13 +11,11 @@ from langchain.schema import BaseOutputParser, output_parser
 
 class JsonOutputParser(BaseOutputParser):
     def parse(self, text):
-        print("Parsing!!!")
         text = text.replace("```", "").replace("json", "")
         return json.loads(text)
 
 
 output_parser = JsonOutputParser()
-
 
 st.set_page_config(
     page_title="QuizGPT",
@@ -26,9 +24,17 @@ st.set_page_config(
 
 st.title("QuizGPT")
 
+llm = ChatOpenAI(
+    temperature=0.1,
+    model="gpt-3.5-turbo-1106",
+    streaming=True,
+    callbacks=[StreamingStdOutCallbackHandler()],
+)
+
 
 def format_docs(docs):
     return "\n\n".join(document.page_content for document in docs)
+
 
 questions_prompt = ChatPromptTemplate.from_messages(
     [
@@ -38,9 +44,7 @@ questions_prompt = ChatPromptTemplate.from_messages(
     You are a helpful assistant that is role playing as a teacher.
          
     Based ONLY on the following context make 10 (TEN) questions to test the user's knowledge about the text.
-
-    The difficulty of questions is {difficulty}    
-
+    
     Each question should have 4 answers, three of them must be incorrect and one should be correct.
          
     Use (o) to signal the correct answer.
@@ -67,6 +71,7 @@ questions_prompt = ChatPromptTemplate.from_messages(
     ]
 )
 
+questions_chain = {"context": format_docs} | questions_prompt | llm
 
 formatting_prompt = ChatPromptTemplate.from_messages(
     [
@@ -192,6 +197,10 @@ formatting_prompt = ChatPromptTemplate.from_messages(
         )
     ]
 )
+
+formatting_chain = formatting_prompt | llm
+
+
 @st.cache_data(show_spinner="Loading file...")
 def split_file(file):
     file_content = file.read()
@@ -207,25 +216,23 @@ def split_file(file):
     docs = loader.load_and_split(text_splitter=splitter)
     return docs
 
+
 @st.cache_data(show_spinner="Making quiz...")
-def run_quiz_chain(_docs, topic, difficulty_level):
+def run_quiz_chain(_docs, topic):
     chain = {"context": questions_chain} | formatting_chain | output_parser
-    
-    return chain.invoke({"context": format_docs(_docs),
-                         "difficulty": "hard"})
+    return chain.invoke(_docs)
 
 
 @st.cache_data(show_spinner="Searching Wikipedia...")
 def wiki_search(term):
-    retriever = WikipediaRetriever(top_k_results=1)
+    retriever = WikipediaRetriever(top_k_results=2)
     docs = retriever.get_relevant_documents(term)
     return docs
 
-# Sidebar for API Key and GitHub Repo link
+
 with st.sidebar:
     docs = None
     topic = None
-    api_key = st.text_input("Enter your OpenAI API Key")
     choice = st.selectbox(
         "Choose what you want to use.",
         (
@@ -233,7 +240,6 @@ with st.sidebar:
             "Wikipedia Article",
         ),
     )
-    difficulty_level = st.selectbox("Select Difficulty", ["Very Easy","Easy","Normal","Hard","Hell"])
     if choice == "File":
         file = st.file_uploader(
             "Upload a .docx , .txt or .pdf file",
@@ -244,60 +250,31 @@ with st.sidebar:
     else:
         topic = st.text_input("Search Wikipedia...")
         if topic:
-            print("Wiki Searching")
             docs = wiki_search(topic)
-            print("Wiki Searching done")
-        
 
 
-
-
-
-if st.sidebar.button("Generate Quiz"):    
-    if docs:
-        print("start quiz generating")
-        count = 0
-        llm = ChatOpenAI(
-            api_key=api_key,
-            temperature=0.1,
-            model="gpt-3.5-turbo-1106",
-            streaming=True,
-            callbacks=[StreamingStdOutCallbackHandler()],
-        )   
-        questions_chain = questions_prompt | llm
-        formatting_chain = formatting_prompt | llm
-
-        response = run_quiz_chain(docs, topic if topic else file.name,difficulty_level)
-        print("start quiz displaying")
-        with st.form("questions_form"):
-            for question in response["questions"]:
-                st.write(question["question"])
-                value = st.radio(
-                    "Select an option.",
-                    [answer["answer"] for answer in question["answers"]],
-                    index= None,
-                    key = count,
-                )
-                count = count+1
-                if {"answer": value, "correct": True} in question["answers"]:
-                    st.success("Correct!")
-                elif value is not None:
-                    st.error("Wrong!")
-            button = st.form_submit_button()
-
-    if not docs:
-            st.markdown(
-                """
-                Please Type Valid Input
-            """
-            )     
 if not docs:
     st.markdown(
         """
     Welcome to QuizGPT.
                 
-    I will make a quiz from Wikipedia articles to test your knowledge and help you study.
+    I will make a quiz from Wikipedia articles or files you upload to test your knowledge and help you study.
                 
-    Get started by searching on Wikipedia in the sidebar.
+    Get started by uploading a file or searching on Wikipedia in the sidebar.
     """
-    )        
+    )
+else:
+    response = run_quiz_chain(docs, topic if topic else file.name)
+    with st.form("questions_form"):
+        for question in response["questions"]:
+            st.write(question["question"])
+            value = st.radio(
+                "Select an option.",
+                [answer["answer"] for answer in question["answers"]],
+                index=None,
+            )
+            if {"answer": value, "correct": True} in question["answers"]:
+                st.success("Correct!")
+            elif value is not None:
+                st.error("Wrong!")
+        button = st.form_submit_button()
