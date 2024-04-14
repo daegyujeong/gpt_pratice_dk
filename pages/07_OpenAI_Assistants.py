@@ -18,6 +18,7 @@ st.set_page_config(
 def DuckDuckSearchTool(inputs):
     print("DuckDuck search tool inputs:",inputs)
     ddg = DuckDuckGoSearchAPIWrapper()
+    print("DuckDuck search start")
     query = inputs["query"]
     results = ddg.run(query)
     # Assuming the results are a JSON object and the first result's URL is accessible via ['results'][0]['url']
