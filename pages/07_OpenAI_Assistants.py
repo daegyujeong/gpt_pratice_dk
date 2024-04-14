@@ -273,7 +273,7 @@ st.markdown(
     """
 Welcome!
             
-Use this chatbot to ask questions to an AI about stock!
+Use this chatbot to ask any questions!
 """
 )
 if "messages" in st.session_state:
