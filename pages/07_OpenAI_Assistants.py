@@ -48,15 +48,18 @@ def SaveToTextFileTool(inputs):
             response = requests.get(url)
             soup = BeautifulSoup(response.content, "html.parser")
             response.raise_for_status()  # Raises an error for bad responses
-            text = soup.find('title').text if soup.find('title') else 'Title tag not found'
-            with open(file_path, 'w') as f:
-                f.write(text)
-                print(f"Saved text from URL to file: {file_path}")
+            text = soup.get_text()
+            st.download_button('Download text', text, 'text')
+            # with open(file_path, 'w') as f:
+            #     f.write(text) 
+            #     # st.download_button('Download CSV', f) 
+            #     print(f"Saved text from URL to file: {file_path}")
         else:
             text = inputs["text"]
-            with open(file_path, 'w') as f:
-                f.write(text)
-                print(f"Saved text from URL to file: {file_path}")
+            st.download_button('Download text', text, 'text')
+            # with open(file_path, 'w') as f:
+            #     f.write(text)
+            #     print(f"Saved text from URL to file: {file_path}")
         return "Text saved to file."
     except requests.RequestException as e:
         with open(file_path, 'w') as f:
@@ -65,9 +68,9 @@ def SaveToTextFileTool(inputs):
     except ValueError:
         with open(file_path, 'w') as f:
             f.write(text)     
-        return "URL did not return a JSON response."   
+        return "URL did not return a JSON response."  
 def get_tool_outputs(run_id, thread_id):
-    run = get_run(run_id, thread.id)
+    run = get_run(run_id, thread_id)
     outputs = []
     for action in run.required_action.submit_tool_outputs.tool_calls:
         action_id = action.id
@@ -188,6 +191,7 @@ with st.sidebar:
         st.error("Please enter your OpenAI API Key")    
     if st.session_state.get("APIKEY_failed"):  
         st.error("Invalid API Key. Please enter a valid API Key")
+        st.write("GitHub Repo:https://github.com/daegyujeong/gpt_pratice_dk/blob/c1e6fadad10a4afff5089f667c8704e6f0ab7f54/pages/03_QuizGPT.py")
     if API_key_check_btn:
         if  api_key:
             llm = None
@@ -206,7 +210,6 @@ with st.sidebar:
                 st.markdown(f"Failed to initialize ChatOpenAI: {str(e)}")   
                 st.session_state["APIKEY_failed"] = True
                 st.rerun()       
-    st.write("GitHub Repo:https://github.com/daegyujeong/gpt_pratice_dk/blob/c1e6fadad10a4afff5089f667c8704e6f0ab7f54/pages/03_QuizGPT.py")
 
 def get_run(run_id, thread_id):
     return client.beta.threads.runs.retrieve(
@@ -224,7 +227,9 @@ def save_message(message, role):
 def get_messages(thread_id):
     messages = client.beta.threads.messages.list(thread_id=thread_id)
     messages = list(messages)
-    last_message = {"role":messages[0].role, "content":messages[0].content[0].text.value}
+    last_message = {"role":"", "content":""}
+    if len(messages) > 0:
+        last_message = {"role":messages[0].role, "content":messages[0].content[0].text.value}
     messages.reverse()
     for message in messages:
         print(f"{message.role}: {message.content[0].text.value}")
@@ -295,6 +300,7 @@ if message:
                 print("Timeout reached, stopping the polling.")
                 break   
             run_status = get_run(run.id, thread.id).status
+               
             if run_status == 'completed':
                 print("Run completed successfully.")
                 result = get_messages(thread.id)
@@ -310,7 +316,13 @@ if message:
             elif run_status == 'stopped':
                 print("Run was stopped.")
             elif run_status == 'requires_action':
-                print("Run is requires_action.")
+                print("Run is requires_action.")  
+                run = get_run(run.id, thread.id)
+                outputs = []
+                for action in run.required_action.submit_tool_outputs.tool_calls:
+                    action_id = action.id
+                    function = action.function
+                    send_message(f"Calling function: {function.name} with arg {function.arguments}", "assistant")                        
                 submit_tool_outputs(run.id, thread.id)
             elif run_status == 'queued':
                 print("Run is queued.")
