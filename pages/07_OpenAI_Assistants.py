@@ -49,14 +49,16 @@ def SaveToTextFileTool(inputs):
             soup = BeautifulSoup(response.content, "html.parser")
             response.raise_for_status()  # Raises an error for bad responses
             text = soup.get_text()
-            st.download_button('Download text', text, 'text')
+            st.download_button('Download text', text, 'text',key = count)
+            count = count + 1
             # with open(file_path, 'w') as f:
             #     f.write(text) 
             #     # st.download_button('Download CSV', f) 
             #     print(f"Saved text from URL to file: {file_path}")
         else:
             text = inputs["text"]
-            st.download_button('Download text', text, 'text')
+            st.download_button('Download text', text, 'text',key = count)
+            count = count + 1
             # with open(file_path, 'w') as f:
             #     f.write(text)
             #     print(f"Saved text from URL to file: {file_path}")
@@ -177,7 +179,7 @@ functions_map = {
 
 
 
-
+count = 0
 
 # Sidebar for API Key and GitHub Repo link
 with st.sidebar:
