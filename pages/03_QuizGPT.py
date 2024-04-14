@@ -37,7 +37,7 @@ questions_prompt = ChatPromptTemplate.from_messages(
             """
     You are a helpful assistant that is role playing as a teacher.
          
-    Based ONLY on the following context make 10 (TEN) questions to test the user's knowledge about the text.
+    Based ONLY on the following context make {question_count} questions to test the user's knowledge about the text.
 
     The difficulty of questions is {difficulty}    
 
@@ -194,6 +194,7 @@ formatting_prompt = ChatPromptTemplate.from_messages(
 )
 @st.cache_data(show_spinner="Loading file...")
 def split_file(file):
+    st.session_state[f"{file.name}_filecache_updated"] = True
     file_content = file.read()
     file_path = f"./.cache/quiz_files/{file.name}"
     with open(file_path, "wb") as f:
@@ -212,12 +213,14 @@ def run_quiz_chain(_docs, topic, difficulty_level):
     chain = {"context": questions_chain} | formatting_chain | output_parser
     
     return chain.invoke({"context": format_docs(_docs),
-                         "difficulty": "hard"})
+                         "difficulty": difficulty_level,
+                         "question_count": question_count[difficulty_level]})
 
 
 @st.cache_data(show_spinner="Searching Wikipedia...")
 def wiki_search(term):
-    retriever = WikipediaRetriever(top_k_results=1)
+    st.session_state[f"{term}_wikicache_updated"] = True
+    retriever = WikipediaRetriever(top_k_results=5)
     docs = retriever.get_relevant_documents(term)
     return docs
 
@@ -233,27 +236,56 @@ with st.sidebar:
             "Wikipedia Article",
         ),
     )
-    difficulty_level = st.selectbox("Select Difficulty", ["Very Easy","Easy","Normal","Hard","Hell"])
+    difficulty_level = st.selectbox("Select Difficulty", ["VeryEasy","Easy","Normal","Hard","Hell"])
+    question_count = {
+        "VeryEasy": 1,
+        "Easy": 3,
+        "Normal": 5,
+        "Hard": 7,
+        "Hell": 10
+    }    
     if choice == "File":
         file = st.file_uploader(
             "Upload a .docx , .txt or .pdf file",
             type=["pdf", "txt", "docx"],
         )
-        if file:
-            docs = split_file(file)
     else:
         topic = st.text_input("Search Wikipedia...")
-        if topic:
-            print("Wiki Searching")
-            docs = wiki_search(topic)
-            print("Wiki Searching done")
+        section = st.text_input("Type the section...(Future feature)")
+    quiz_generating_btn = st.button("Generate Quiz")
+    print("quiz_generating_btn status:",quiz_generating_btn)
+    if quiz_generating_btn:
+        if choice == "File":
+            if file:
+                docs = split_file(file)
+            # todo: add a cache for the file upload
+        else:
+            if topic:
+                print("Wiki Searching")
+                docs = wiki_search(topic)
+                print("Wiki Searching done")
+            # todo: add a cache for the wiki search
+            # todo: search for a specific section in the wiki article
         
+if choice == "File":
+    if file:
+        quiz_cached = st.session_state.get(f"{file.name}_filecache_updated")
+        print(f"cached_update : {file.name}_filecache_updated :",quiz_cached)
+        if quiz_cached:
+         docs = split_file(file)
+    else:
+        quiz_cached = False
+else:        
+    if topic:
+        quiz_cached = st.session_state.get(f"{topic}_wikicache_updated")
+        print(f"cached_update : {topic}_wikicache_updated",quiz_cached)
+        if quiz_cached:
+            docs = wiki_search(topic)
+    else:
+        quiz_cached = False
 
-
-
-
-
-if st.sidebar.button("Generate Quiz"):    
+print("quiz_cached",quiz_cached,"quiz_generating_btn",quiz_generating_btn)
+if quiz_generating_btn or quiz_cached:    
     if docs:
         print("start quiz generating")
         count = 0
@@ -266,10 +298,12 @@ if st.sidebar.button("Generate Quiz"):
         )   
         questions_chain = questions_prompt | llm
         formatting_chain = formatting_prompt | llm
-
-        response = run_quiz_chain(docs, topic if topic else file.name,difficulty_level)
+        topic = topic if topic else file.name
+        response = run_quiz_chain(docs, topic, difficulty_level)
         print("start quiz displaying")
-        with st.form("questions_form"):
+        question_form = st.form("questions_form")
+        with question_form:
+            correctcount = 0
             for question in response["questions"]:
                 st.write(question["question"])
                 value = st.radio(
@@ -281,10 +315,51 @@ if st.sidebar.button("Generate Quiz"):
                 count = count+1
                 if {"answer": value, "correct": True} in question["answers"]:
                     st.success("Correct!")
+                    correctcount = correctcount + 1
                 elif value is not None:
                     st.error("Wrong!")
-            button = st.form_submit_button()
+                total_count = len(response["questions"])
 
+            if st.session_state.get(f"{topic}_{difficulty_level}_corrected"):
+                print("corrected")
+                submit_button = st.form_submit_button("Retry")
+                reset_button = st.form_submit_button("Reset Quiz")
+
+            elif(quiz_cached):
+                submit_button = st.form_submit_button("Retry")
+            else:
+                submit_button = st.form_submit_button("Submit Quiz")
+            if submit_button:
+                if correctcount == total_count:
+                    st.write(f"Your Score is {correctcount}/{total_count}")
+                    st.balloons()
+                    print(st.session_state.get(f"{topic}_{difficulty_level}_corrected",False))
+                    if st.session_state.get(f"{topic}_{difficulty_level}_corrected") == False:                      
+                        reset_button = st.form_submit_button("Reset Quiz")
+                        st.session_state[f"{topic}_{difficulty_level}_corrected"] = True
+                else:
+                    st.session_state[f"{topic}_{difficulty_level}_corrected"] = False
+                    st.write(f"Your Score is {correctcount}/{total_count} Retry!")
+ 
+        if st.session_state.get(f"{topic}_{difficulty_level}_corrected"):           
+            if reset_button:
+                st.session_state[f"{topic}_{difficulty_level}_corrected"] = False
+                st.cache_data.clear()
+                if choice == "File":
+                    st.session_state[f"{topic}_filecache_updated"] = False
+                    print(f"{topic}_filecache_updated false")
+                else:               
+                    st.session_state[f"{topic}_wikicache_updated"] = False
+                    print(f"{topic}_wikicache_updated false")
+                # del st.session_state['quiz_generating_btn']
+                print("Cache Cleared")
+                docs = None
+                del question_form
+                del submit_button
+                del quiz_generating_btn
+                st.rerun()
+                # how can I clear specific cache?
+                    
     if not docs:
             st.markdown(
                 """
