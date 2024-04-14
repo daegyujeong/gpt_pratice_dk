@@ -43,31 +43,37 @@ def WikiSearchTool(inputs):
 def SaveToTextFileTool(inputs):
     try:
         file_path = f"MyResearch.txt"
+        if 'count' not in st.session_state:
+            st.session_state['count'] = 0
+        mykey = st.session_state['count']
         if "url" in inputs.keys():
             url = inputs["url"]
             response = requests.get(url)
             soup = BeautifulSoup(response.content, "html.parser")
             response.raise_for_status()  # Raises an error for bad responses
             text = soup.get_text()
-            st.download_button('Download text', text, 'text',key = count)
-            count = count + 1
+            st.download_button('Download text', text, 'text',key = mykey)
             # with open(file_path, 'w') as f:
             #     f.write(text) 
             #     # st.download_button('Download CSV', f) 
             #     print(f"Saved text from URL to file: {file_path}")
         else:
             text = inputs["text"]
-            st.download_button('Download text', text, 'text',key = count)
-            count = count + 1
+            st.download_button('Download text', text, 'text',key = mykey)
             # with open(file_path, 'w') as f:
             #     f.write(text)
             #     print(f"Saved text from URL to file: {file_path}")
+        st.session_state['count'] += 1
         return "Text saved to file."
     except requests.RequestException as e:
-        with open(file_path, 'w') as f:
-            f.write(text)     
+        text = inputs["text"]
+        st.download_button('Download text', text, 'text',key = mykey)
+        st.session_state['count'] += 1
         return f"Failed to load URL: {str(e)}"
     except ValueError:
+        text = inputs["text"]
+        st.download_button('Download text', text, 'text',key = mykey)
+        st.session_state['count'] += 1
         with open(file_path, 'w') as f:
             f.write(text)     
         return "URL did not return a JSON response."  
@@ -193,7 +199,7 @@ with st.sidebar:
         st.error("Please enter your OpenAI API Key")    
     if st.session_state.get("APIKEY_failed"):  
         st.error("Invalid API Key. Please enter a valid API Key")
-        st.write("GitHub Repo:https://github.com/daegyujeong/gpt_pratice_dk/blob/ae82da97ab0323ee4d748e9b609fbf155229cb38/pages/07_OpenAI_Assistants.py")
+        st.write("GitHub Repo:https://github.com/daegyujeong/gpt_pratice_dk/blob/7d1258f0d020d5a1a4e0378d158526ded2f97b50/pages/07_OpenAI_Assistants.py")
     if API_key_check_btn:
         if  api_key:
             llm = None
@@ -326,6 +332,7 @@ if message:
                     function = action.function
                     send_message(f"Calling function: {function.name} with arg {function.arguments}", "assistant")                        
                 submit_tool_outputs(run.id, thread.id)
+                count = count + 1
             elif run_status == 'queued':
                 print("Run is queued.")
             elif run_status == 'in_progress':
