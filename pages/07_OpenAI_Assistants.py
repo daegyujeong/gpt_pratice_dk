@@ -191,7 +191,7 @@ with st.sidebar:
         st.error("Please enter your OpenAI API Key")    
     if st.session_state.get("APIKEY_failed"):  
         st.error("Invalid API Key. Please enter a valid API Key")
-        st.write("GitHub Repo:https://github.com/daegyujeong/gpt_pratice_dk/blob/c1e6fadad10a4afff5089f667c8704e6f0ab7f54/pages/03_QuizGPT.py")
+        st.write("GitHub Repo:https://github.com/daegyujeong/gpt_pratice_dk/blob/ae82da97ab0323ee4d748e9b609fbf155229cb38/pages/07_OpenAI_Assistants.py")
     if API_key_check_btn:
         if  api_key:
             llm = None
