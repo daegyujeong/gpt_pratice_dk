@@ -246,8 +246,7 @@ def paint_history():
     for message in st.session_state["messages"]:
         paint_message(
             message["message"],
-            message["role"],
-            save=False,
+            message["role"]
         )
 
 
@@ -262,8 +261,8 @@ Welcome!
 Use this chatbot to ask questions to an AI about stock!
 """
 )
-
-
+if "messages" in st.session_state:
+    paint_history()
 
 message = st.chat_input("Ask anything about your file...")
 if message:
@@ -323,6 +322,7 @@ if message:
             print(f"Current run status: {run.status}, waiting for completion...")
             time.sleep(5)  # Wait for 5 seconds before checking again
         result = get_messages(thread.id)
+        print(st.session_state["messages"])
         # send_message(result, "assistant")
 
         # st.rerun()
