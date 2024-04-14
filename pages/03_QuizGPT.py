@@ -229,6 +229,8 @@ with st.sidebar:
     docs = None
     topic = None
     api_key = st.text_input("Enter your OpenAI API Key")
+    if not api_key or st.session_state.get("APIKEY_failed"):
+        st.error("Please enter your OpenAI API Key")
     choice = st.selectbox(
         "Choose what you want to use.",
         (
@@ -254,7 +256,25 @@ with st.sidebar:
         section = st.text_input("Type the section...(Future feature)")
     quiz_generating_btn = st.button("Generate Quiz")
     print("quiz_generating_btn status:",quiz_generating_btn)
+ 
     if quiz_generating_btn:
+        llm = None
+        # for checking if the API Key is valid
+        try:
+            llm = ChatOpenAI(
+                api_key=api_key,
+                temperature=0.1,
+                model="gpt-3.5-turbo-1106",
+                streaming=True,
+                callbacks=[StreamingStdOutCallbackHandler()],
+            )
+            llm.invoke("Hello!")   
+            st.session_state["APIKEY_failed"] = False
+            # You might want to add a simple test call here if the API does not get invoked elsewhere immediately
+        except Exception as e:
+            st.markdown(f"Failed to initialize ChatOpenAI: {str(e)}")   
+            st.session_state["APIKEY_failed"] = True
+            st.rerun()        
         if choice == "File":
             if file:
                 docs = split_file(file)
@@ -266,6 +286,8 @@ with st.sidebar:
                 print("Wiki Searching done")
             # todo: add a cache for the wiki search
             # todo: search for a specific section in the wiki article
+    st.write("GitHub Repo:https://github.com/daegyujeong/gpt_pratice_dk/blob/c1e6fadad10a4afff5089f667c8704e6f0ab7f54/pages/03_QuizGPT.py")
+       
         
 if choice == "File":
     if file:
